@@ -1,0 +1,31 @@
+create
+
+{% if error %}
+  <p style="color: red;">{{ error }}</p>
+{% endif %}
+
+
+
+<form action="{% url 'create' %}"  method="post" enctype="multipart/form-data">
+
+    {% csrf_token %}
+        <h3 class="mt-4 mb-4">Create Blog</h3>
+        <label for="" class="form-label">Title</label>
+        <div class="input-group">
+          <input type="text" class="form-control" name="postname" required>
+        </div>
+        <label for="" class="form-label">Content</label>
+        <textarea class="form-control" name="content" required></textarea>
+        <br>
+        <label for="" class="form-label">Category</label>
+        <input type="text" class="form-control" name="category" required>
+        <br>
+        <label for="" class="form-label">Upload Image</label>
+        <input type="file" class="form-control" name="image">
+    <br>
+        <button type="submit">Create Post</button>
+        <br>
+        {% for message in messages %}
+        <p class="text-danger">{{message}}</p>
+        {% endfor %}
+</form>
