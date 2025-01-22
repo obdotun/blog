@@ -2,7 +2,9 @@
 <h2>{{ post.category }}</h2>
 <p>published the {{post.time}}    <a href="{% url 'deletepost'  post.id%}">Delete post</a></p>
 <img src="{{media_url}}{{post.image}}" alt="{{post.postname}}'s profile picture">
-    <div>{{ post.content }}</div>
+    <div class="content">
+            {{ post.content|safe }}  <!-- Use the safe filter to render HTML -->
+    </div>
 <p>
     <!-- Like button -->
  {% if request.user not in post.liked_by.all %}

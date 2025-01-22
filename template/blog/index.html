@@ -7,8 +7,10 @@ hello test
 <ul>
     {% for post in posts %}
         {{post.postname}}
-        <p></p>
-        {{post.content}}
+        <p>
+            {{ post.content|safe }}
+        </p>
+
     {% endfor %}
 </ul>
 
