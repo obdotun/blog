@@ -3,7 +3,7 @@ hello test
 <p style="color: red;">{{ message }}</p>
 {% endfor %}
 
-{% if posts %}
+{% if has_posts %}
 <ul>
     {% for post in posts %}
         {{post.postname}}

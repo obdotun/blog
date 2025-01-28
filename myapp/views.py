@@ -1,7 +1,12 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
+from django.views.generic import DetailView, ListView, UpdateView
+from django.views.generic.base import TemplateView
+from django.contrib.auth.decorators import login_required
+from django.utils.decorators import method_decorator
 from django.contrib.auth.models import User
 from django.contrib import messages
+from django.urls import reverse
 from django.contrib.auth import login, logout, authenticate
 from django.core.paginator import Paginator
 from django.core.exceptions import ValidationError
@@ -11,43 +16,85 @@ from django.db.models import F
 from django.conf import settings
 from .models import *
 
-# Create your views here.
-def index(request):
-    posts=Post.objects.all()
-    if posts.count() != 0:
-        return render(request, "blog/index.html",{"posts":posts})
-    return render(request, "blog/index.html")
 
-@login_required(login_url='signin')
-def profile(request,id):
-    if request.user.id != id:
-        return redirect('index')
-    # Fetch the user or return a 404 error if not found
-    user = get_object_or_404(User, id=id)
+class HomePageView(TemplateView):
+    template_name = "blog/index.html"
 
-    # Fetch the user's posts with pagination
-    posts_list = Post.objects.filter(user_id=request.user.id)  # Order by most recent
-    paginator = Paginator(posts_list, 3)  # Show 10 posts per page
-    page_number = request.GET.get('page')  # Get the page number from the request
-    posts = paginator.get_page(page_number)
+    def get_context_data(self, **kwargs):
+        # Call the base implementation first to get the context
+        context = super().get_context_data(**kwargs)
 
-    # Render the template with context
-    return render(request, 'blog/profile.html', {
-        'user': user,
-        'posts': posts,
-        'media_url': settings.MEDIA_URL,
-    })
+        # Fetch all posts from the database
+        posts = Post.objects.all()
 
-@login_required
-def profileedit(request, id):
-    # Ensure the user is editing their own profile
-    if request.user.id != id:
-        return redirect('profile', id=request.user.id)
+        # Add the posts to the context
+        context["posts"] = posts
 
-    # Fetch the user object or return a 404 error
-    user = get_object_or_404(User, id=id)
+        # Optionally, you can add a flag to indicate whether posts exist
+        context["has_posts"] = posts.exists()
 
-    if request.method == 'POST':
+        return context
+
+@method_decorator(login_required(login_url='signin'), name='dispatch')
+class ProfileView(TemplateView):
+    template_name = 'blog/profile.html'
+    def get(self, request, *args, **kwargs):
+        user_id = self.kwargs.get('id')
+
+        # Check if the requested profile belongs to the logged-in user
+        if request.user.id != user_id:
+            return redirect('index')
+
+        # Fetch the user or return a 404 error if not found
+        user = get_object_or_404(User, id=user_id)
+
+        # Fetch the user's posts with pagination
+        posts_list = Post.objects.filter(user_id=request.user.id)
+        paginator = Paginator(posts_list, 3)  # Show 3 posts per page
+        page_number = request.GET.get('page')  # Get the page number from the request
+        posts = paginator.get_page(page_number)
+
+        # Prepare the context data
+        context = {
+            'user': user,
+            'posts': posts,
+            'media_url': settings.MEDIA_URL,
+        }
+
+        return self.render_to_response(context)
+
+@method_decorator(login_required, name='dispatch')
+class ProfileEditView(TemplateView):
+    template_name = 'blog/profileedit.html'
+
+    def __init__(self, **kwargs):
+        super().__init__(kwargs)
+        self.error_message = None
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user_id = self.kwargs.get('id')
+
+        # Fetch the user or return a 404 error if not found
+        user = get_object_or_404(User, id=user_id)
+        context['user'] = user
+
+        # Add error message to context if it exists
+        if hasattr(self, 'error_message'):
+            context['error_message'] = self.error_message
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        user_id = self.kwargs.get('id')
+
+        # Check if the requested profile belongs to the logged-in user
+        if request.user.id != user_id:
+            return redirect('index')
+
+        # Fetch the user or return a 404 error if not found
+        user = get_object_or_404(User, id=user_id)
+
         try:
             # Get data from the form
             firstname = request.POST.get('firstname', '').strip()
@@ -68,71 +115,82 @@ def profileedit(request, id):
             user.save()
 
             # Redirect to the profile page after saving
-            return redirect('profile', id=id)
+            return redirect('profile', id=user_id)
 
         except ValidationError as e:
             # Handle invalid email
-            error_message = str(e)
-            return render(request, "blog/profileedit.html", {
-                'user': user,
-                'error_message': error_message,
+            self.error_message = str(e)
+            return self.render_to_response(self.get_context_data())
+
+class BlogView(ListView):
+    template_name = 'blog/blog.html'
+    context_object_name = 'posts'
+    paginate_by = 1
+
+    def dispatch(self, request, *args, **kwargs):
+        # Check if the user is authenticated
+        if not request.user.is_authenticated:
+            # Render the template with empty data for unauthenticated users
+            return render(request, self.template_name, {
+                'posts': [],
+                'top_posts': [],
+                'recent_posts': [],
+                'user': None,
+                'media_url': settings.MEDIA_URL,
             })
+        return super().dispatch(request, *args, **kwargs)
 
-    # Render the edit form for GET requests
-    return render(request, "blog/profileedit.html", {
-        'user': user,
-    })
+    def get_queryset(self):
+        # Fetch posts by the logged-in user
+        return Post.objects.filter(user_id=self.request.user.id).order_by("-id")
 
-def blog(request):
-    # Ensure the user is authenticated
-    if not request.user.is_authenticated:
-        return render(request, "blog/blog.html", {
-            'posts': [],
-            'top_posts': [],
-            'recent_posts': [],
-            'user': None,
-            'media_url': settings.MEDIA_URL
-        })
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Add additional context data
+        context['top_posts'] = Post.objects.all().order_by("-likes")[:10]  # Top 10 posts by likes
+        context['recent_posts'] = Post.objects.all().order_by("-id")[:10]  # Recent 10 posts
+        context['media_url'] = settings.MEDIA_URL
+        return context
 
-    # Fetch posts by the logged-in user
-    user_posts = Post.objects.filter(user_id=request.user.id).order_by("-id")
-    paginator_user_posts = Paginator(user_posts, 3)  # Show 10 posts per page
-    page_number_user_posts = request.GET.get('page_user_posts')
-    posts = paginator_user_posts.get_page(page_number_user_posts)
+class PostDetailView(DetailView):
+    model = Post
+    template_name = 'blog/post.html'
+    context_object_name = 'post'  # The name of the variable to use in the template
+    pk_url_kwarg = 'id'  # Use 'id' instead of 'pk' in the URL
 
-    # Fetch top posts (ordered by likes)
-    top_posts = Post.objects.all().order_by("-likes")[:10]  # Limit to 10 posts
+    def get_context_data(self, **kwargs):
+        # Call the base implementation first to get the context
+        context = super().get_context_data(**kwargs)
+        # Add additional context data
+        context['media_url'] = settings.MEDIA_URL
+        context['comments'] = Comment.objects.filter(post_id=self.object.id)
+        return context
 
-    # Fetch recent posts (ordered by ID)
-    recent_posts = Post.objects.all().order_by("-id")[:10]  # Limit to 10 posts
 
-    # Render the template with context
-    return render(request, "blog/blog.html", {
-        'posts': posts,
-        'top_posts': top_posts,
-        'recent_posts': recent_posts,
-        'user': request.user,
-        'media_url': settings.MEDIA_URL
-    })
+class PostEditView(TemplateView):
+    template_name = 'blog/postedit.html'
 
-def post(request,id):
-    post=get_object_or_404(Post, id=id)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        # Fetch the post object to be edited
+        post_id = self.kwargs.get('id')
+        post = get_object_or_404(Post, id=post_id)
+        context['post'] = post
+        return context
 
-    return render(request, 'blog/post.html', {
-        'post': post,
-        'media_url': settings.MEDIA_URL,
-        'comments': Comment.objects.filter(post_id=post.id),
-    })
+    def post(self, request, *args, **kwargs):
+        # Fetch the post object to be edited
+        post_id = self.kwargs.get('id')
+        post = get_object_or_404(Post, id=post_id)
 
-def editpost(request,id):
-    post = Post.objects.get(id=id)
-    if request.method == 'POST':
         try:
-            postname = request.POST.get('postname').strip()
-            content = request.POST.get('content').strip()
-            category = request.POST.get('category').strip()
+            # Get data from the form
+            postname = request.POST.get('postname', '').strip()
+            content = request.POST.get('content', '').strip()
+            category = request.POST.get('category', '').strip()
             image = request.FILES.get('image')
 
+            # Update only non-empty fields
             if postname:
                 post.postname = postname
             if content:
@@ -142,62 +200,81 @@ def editpost(request,id):
             if image:
                 post.image = image
 
+            # Save the updated post object
             post.save()
 
-        except:
-            print("Error")
-        return redirect('post', post.id)
+            # Redirect to the post detail page after saving
+            return redirect('post', id=post.id)
 
-    return render(request, "blog/postedit.html", {
-        'post': post
-    })
+        except ValidationError as e:
+            # Handle validation errors
+            error_message = str(e)
+            return self.render_to_response(self.get_context_data(error_message=error_message))
 
-@login_required
-def deletepost(request,id):
-    post = Post.objects.get(id=id)
-    post.delete()
-    return redirect("blog")
+@method_decorator(login_required, name='dispatch')
+class DeletePostView(TemplateView):
+    def get(self, request, *args, **kwargs):
+        post_id = kwargs.get('id')
+        post = get_object_or_404(Post, id=post_id)
+        post.delete()
+        return redirect("blog")
 
-@login_required
-def increaselikes(request, id):
-    # Fetch the post or return a 404 error if not found
-    post = get_object_or_404(Post, id=id)
+@method_decorator(login_required, name='dispatch')
+class IncreaselikesView(TemplateView):
+    def post(self, request, *args, **kwargs):
+        post_id = kwargs.get('id')
+        # Fetch the post or return a 404 error if not found
+        post = get_object_or_404(Post, id=post_id)
 
-    # Prevent duplicate likes by the same user
-    if request.user not in post.liked_by.all():
-        # Use F() to avoid race conditions
-        post.likes = F('likes') + 1
-        post.liked_by.add(request.user)  # Track the user who liked the post
-        post.save()
-    # Redirect to the post's detail page
-    return redirect("post", id=post.id)
+        # Prevent duplicate likes by the same user
+        if request.user not in post.liked_by.all():
+            # Use F() to avoid race conditions
+            post.likes = F('likes') + 1
+            post.liked_by.add(request.user)  # Track the user who liked the post
+            post.save()
+        # Redirect to the post's detail page
+        # return redirect(reverse('post', kwargs={'id': post_id}))
+        return (redirect("post", id=post.id))
 
-@login_required
-def decreaselikes(request, id):
-    post = get_object_or_404(Post, id=id)
-    if request.user in post.liked_by.all():
-        post.likes = F('likes') - 1
-        post.liked_by.remove(request.user)
-        post.save()
-    return redirect("post", id=post.id)
 
-def savecomment(request,id):
-    post = Post.objects.get(id=id)
-    if request.method == 'POST':
+@method_decorator(login_required, name='dispatch')
+class DecreaselikesView(TemplateView):
+    def post(self, request, *args, **kwargs):
+        post_id = kwargs.get('id')
+        post = get_object_or_404(Post, id=post_id)
+        if request.user in post.liked_by.all():
+            post.likes = F('likes') - 1
+            post.liked_by.remove(request.user)
+            post.save()
+        return redirect("post", id=post.id)
+
+class SaveCommentView(TemplateView):
+    def post(self, request, *args, **kwargs):
+        post_id = kwargs.get('id')
+        post = Post.objects.get(id=post_id)
         content = request.POST['message']
         Comment(post_id=post.id, user_id=request.user.id, content=content).save()
-        return redirect("post",id=id)
+        return redirect("post", id=post_id)
 
-def deletecomment(request,id):
-    comment = Comment.objects.get(id=id)
-    postid = comment.post.id
-    comment.delete()
-    return redirect("post",id=postid)
+class DeleteCommentView(TemplateView):
+    def get(self, request, *args, **kwargs):
+        comment_id= kwargs.get('id')
+        comment = Comment.objects.get(id=comment_id)
+        post_id = comment.post.id
+        comment.delete()
+        return redirect("post",id=post_id)
 
 
-@login_required(login_url='signin')
-def create(request):
-    if request.method == 'POST':
+# @login_required(login_url='signin')
+class CreateView(TemplateView):
+    template_name = 'blog/create.html'
+    context_object_name = 'post'
+
+    def get(self,request,*args, **kwargs):
+        return render(request, self.template_name)
+
+    def post(self, request, *args, **kwargs):
+
         try:
             # Extract form data
             postname = request.POST.get('postname', '').strip()
@@ -207,7 +284,7 @@ def create(request):
 
             # Validate required fields
             if not postname or not content:
-                return render(request, "blog/create.html", {'error': "Postname and content are required."})
+                return render(request, self.template_name, {'error': "Postname and content are required."})
 
             # Save the post
             Post.objects.create(
@@ -221,16 +298,19 @@ def create(request):
 
         except IntegrityError as e:
             print(f"Database error: {e}")
-            return render(request, "blog/create.html", {'error': "A database error occurred."})
+            return render(request, self.template_name, {'error': "A database error occurred."})
         except Exception as e:
             print(f"Unexpected error: {e}")
-            return render(request, "blog/create.html", {'error': "An unexpected error occurred."})
+            return render(request, self.template_name, {'error': "An unexpected error occurred."})
 
-        # Render the create template for GET requests
-    return render(request, "blog/create.html")
+class SignupView(TemplateView):
+    template_name = "blog/signup.html"
 
-def signup(request):
-    if request.method == 'POST':
+    def get(self,request,*args, **kwargs):
+        return render(request, self.template_name)
+
+    def post(self, request, *args, **kwargs):
+
         username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
         password = request.POST.get('password', '').strip()
@@ -239,19 +319,19 @@ def signup(request):
         # Validate input
         if not username or not password or not confirm_password:
             messages.error(request, "All fields are required.")
-            return render(request, "blog/signup.html")
+            return render(request, self.template_name)
 
         if password != confirm_password:
             messages.error(request, "Passwords do not match.")
-            return render(request, "blog/signup.html")
+            return render(request, self.template_name)
 
         if User.objects.filter(username=username).exists():
             messages.error(request, "Username already exists.")
-            return render(request, "blog/signup.html")
+            return render(request, self.template_name)
 
         if User.objects.filter(email=email).exists():
             messages.error(request, "Email is already registered.")
-            return render(request, "blog/signup.html")
+            return render(request, self.template_name)
 
         # Create user
         user = User.objects.create_user(username=username, email=email, password=password)
@@ -262,10 +342,15 @@ def signup(request):
         messages.success(request, "Signup successful!")
         return redirect('index')
 
-    return render(request, "blog/signup.html")
 
-def signin(request):
-    if request.method == 'POST':
+
+class SigninView(TemplateView):
+    template_name= "blog/signin.html"
+
+    def get(self, request, *args, **kwargs):
+        return render(request, self.template_name)
+
+    def post(self, request, *args, **kwargs):
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '').strip()
 
@@ -277,9 +362,8 @@ def signin(request):
         else:
             messages.error(request, "Invalid username or password.")
 
-    return render(request, "blog/signin.html")
-
-def signout(request):
-    logout(request)
-    messages.success(request, "You have been logged out.")
-    return redirect('signin')
+class SignoutView(TemplateView):
+    def get(self,request, *args, **kwargs):
+        logout(request)
+        messages.success(request, "You have been logged out.")
+        return redirect('signin')
