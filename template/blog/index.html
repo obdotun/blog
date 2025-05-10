@@ -1,0 +1,17 @@
+hello test
+{% for message in messages %}
+<p style="color: red;">{{ message }}</p>
+{% endfor %}
+
+{% if posts %}
+<ul>
+    {% for post in posts %}
+        {{post.postname}}
+        <p>
+            {{ post.content|safe }}
+        </p>
+
+    {% endfor %}
+</ul>
+
+{% endif %}

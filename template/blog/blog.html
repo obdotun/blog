@@ -1,0 +1,76 @@
+
+
+{% block content %}
+  <h1>Blog</h1>
+
+  <!-- Display logged-in user's posts -->
+  <h2>Your Posts</h2>
+  {% if posts %}
+    <ul>
+      {% for post in posts %}
+        <li>
+          <h3><a href="{% url 'post' post.id %}">{{ post.postname }}</a></h3>
+          <div class="content">
+            {{ post.content|safe }}  <!-- Use the safe filter to render HTML -->
+          </div>
+          <small>{{ post.time }}</small>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <!-- Pagination for user's posts -->
+    <div class="pagination">
+      <span class="step-links">
+        {% if posts.has_previous %}
+          <a href="?page_user_posts=1">&laquo; first</a>
+          <a href="?page_user_posts={{ posts.previous_page_number }}">previous</a>
+        {% endif %}
+
+        <span class="current">
+          Page {{ posts.number }} of {{ posts.paginator.num_pages }}.
+        </span>
+
+        {% if posts.has_next %}
+          <a href="?page_user_posts={{ posts.next_page_number }}">next</a>
+          <a href="?page_user_posts={{ posts.paginator.num_pages }}">last &raquo;</a>
+        {% endif %}
+      </span>
+    </div>
+  {% else %}
+    <p>No posts found.</p>
+  {% endif %}
+
+  <!-- Display top posts -->
+  <h2>Top Posts</h2>
+  {% if top_posts %}
+    <ul>
+      {% for post in top_posts %}
+        <li>
+          <h3><a href="{% url 'post' post.id%}">{{ post.postname }}</a></h3>
+          <p>{{ post.content|safe }}</p>
+          <small>Likes: {{ post.likes }}</small>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No top posts found.</p>
+  {% endif %}
+
+  <!-- Display recent posts -->
+  <h2>Recent Posts</h2>
+  {% if recent_posts %}
+    <ul>
+      {% for post in recent_posts %}
+        <li>
+          <h3><a href="{% url 'post' post.id %}">{{ post.postname }}</a></h3>
+          <div class="content">
+            {{ post.content|safe }}  <!-- Use the safe filter to render HTML -->
+          </div>
+          <small>{{ post.time }}</small>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p>No recent posts found.</p>
+  {% endif %}
+{% endblock %}
