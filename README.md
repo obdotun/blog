@@ -1,3 +1,5 @@
+## commentaire
+Dans ce projet nous faisons utlisation des cla classe base view
 ## F()
 
 
@@ -23,9 +25,9 @@ The redirect URL ("post") is still hardcoded, but you can use Django's reverse f
 
 ## Request
 
-## FBV (Function Based view)
 
 ## CBV
+We here used class based view method/approach
 
 ## concurence management with like button using F()
 

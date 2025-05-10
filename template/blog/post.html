@@ -1,0 +1,48 @@
+<h1>{{ post.postname }}</h1>
+<h2>{{ post.category }}</h2>
+<p>published the {{post.time}}    <a href="{% url 'deletepost'  post.id%}">Delete post</a></p>
+<img src="{{media_url}}{{post.image}}" alt="{{post.postname}}'s profile picture">
+    <div class="content">
+            {{ post.content|safe }}  <!-- Use the safe filter to render HTML -->
+    </div>
+<p>
+    <!-- Like button -->
+ {% if request.user not in post.liked_by.all %}
+<form action="{% url 'increaselikes' post.id %}" method="post">
+  {% csrf_token %}
+  <button type="submit">
+    Like
+  </button>
+</form>
+{% else %}
+<!-- Like button -->
+<form action="{% url 'decreaselikes' post.id %}" method="post">
+  {% csrf_token %}
+  <button type="submit" {% if request.user not in post.liked_by.all %}disabled{% endif %}>
+    Dislike
+  </button>
+</form>
+{% endif %}
+    {{post.likes}} like(s)
+</p>
+<p>Author: {{post.user.first_name}}</p>
+
+<h4>Comments</h4>
+{% if user.is_authenticated %}
+<form action="{% url 'savecomment' post.id %}"  method="post" >
+
+    {% csrf_token %}
+        <div class="input-group">
+          <input type="text" class="form-control" name="message" placeholder="Message" required>
+        </div>
+        <button type="submit">Send comment</button>
+        <br>
+</form>
+{% endif %}
+
+{% if comments %}
+    {% for comment in comments %}
+<p>{{comment.content}} - {{comment.user.username}} <a href="{% url 'deletecomment' comment.id%}">Delete</a></p>
+
+    {% endfor %}
+{% endif %}

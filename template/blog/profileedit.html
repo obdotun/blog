@@ -1,0 +1,30 @@
+
+{% block content %}
+  <h1>Edit Profile</h1>
+
+  <!-- Display error message if any -->
+  {% if error_message %}
+    <p style="color: red;">{{ error_message }}</p>
+  {% endif %}
+
+  <!-- Edit form -->
+  <form method="post">
+    {% csrf_token %}
+    <div>
+      <label for="firstname">First Name:</label>
+      <input type="text" id="firstname" name="firstname" value="{{ user.first_name }}">
+    </div>
+    <div>
+      <label for="lastname">Last Name:</label>
+      <input type="text" id="lastname" name="lastname" value="{{ user.last_name }}">
+    </div>
+    <div>
+      <label for="email">Email:</label>
+      <input type="email" id="email" name="email" value="{{ user.email }}">
+    </div>
+    <button type="submit">Save Changes</button>
+  </form>
+
+  <!-- Link back to profile -->
+  <a href="{% url 'profile' id=user.id %}">Cancel</a>
+{% endblock %}

@@ -1,0 +1,59 @@
+#version: '3.8'
+#
+#services:
+#  web:
+#    build: .
+#    command: python manage.py runserver 0.0.0.0:8000
+#    volumes:
+#      - .:/app
+#    ports:
+#      - "8000:8000"
+#    depends_on:
+#      - db
+#
+#  db:
+#    image: postgres:13
+#    environment:
+#      POSTGRES_USER: myuser
+#      POSTGRES_PASSWORD: mypassword
+#      POSTGRES_DB: mydatabase
+#    volumes:
+#      - postgres_data:/var/lib/postgresql/data
+#
+#volumes:
+#  postgres_data:
+
+#version: '3.8'
+#
+#services:
+#  web:
+#    build: .
+#    command: python manage.py runserver 0.0.0.0:8000
+#    volumes:
+#      - .:/app  # Mount the current directory to /app in the container
+#      - db-data:/app/db.sqlite3  # Persistent volume for SQLite database
+#    ports:
+#      - "8000:8000"
+#    environment:
+#      - PYTHONUNBUFFERED=1
+#
+#volumes:
+#  db-data:
+#
+#version: '3.9'
+
+# DOcekr compose for app using dbsqlite3
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app  # Mount the current directory to /app in the container
+      - ./media:/app/media  # Persist media files
+      - ./db.sqlite3:/app/db.sqlite3  # Persist the SQLite database
+    environment:
+      - PYTHONUNBUFFERED=1  # Ensures logs are flushed immediately
+    command: python manage.py runserver 0.0.0.0:8000
